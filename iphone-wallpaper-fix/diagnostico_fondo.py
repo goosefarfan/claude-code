@@ -98,7 +98,14 @@ def main():
     else:
         raices = carpetas_de_respaldo()
 
-    respaldos = listar_respaldos(raices)
+    try:
+        respaldos = listar_respaldos(raices)
+    except PermissionError:
+        print("\nmacOS no deja que la Terminal lea la carpeta de respaldos.")
+        print("Ve a Ajustes del Sistema > Privacidad y seguridad > Acceso total al disco,")
+        print("activa 'Terminal', cierra la Terminal por completo (Cmd+Q), ábrela")
+        print("de nuevo y vuelve a ejecutar este script.")
+        sys.exit(1)
     if not respaldos:
         print("No encontre ningun respaldo local.")
         print("Haz primero un respaldo del iPhone en Finder (Mac) o en iTunes /")
