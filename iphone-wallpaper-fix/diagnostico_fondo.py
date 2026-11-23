@@ -14,8 +14,10 @@ que hay que compartir para preparar la reparacion.
 
 import os
 import plistlib
+import shutil
 import sqlite3
 import sys
+import tempfile
 from pathlib import Path
 
 # Palabras que identifican archivos del sistema de fondos de pantalla de iOS.
@@ -125,8 +127,25 @@ def main():
         terminar(salida)
         return
 
-    con = sqlite3.connect(f"file:{respaldo / 'Manifest.db'}?mode=ro", uri=True)
-    total = con.execute("SELECT COUNT(*) FROM Files").fetchone()[0]
+    # Se trabaja sobre una COPIA temporal del indice: el original no se abre
+    # ni se toca (abrirlo directo en solo-lectura falla en algunos Mac).
+    tmp = Path(tempfile.mkdtemp(prefix="diag_fondo_"))
+    for nombre in ("Manifest.db", "Manifest.db-wal", "Manifest.db-shm"):
+        if (respaldo / nombre).exists():
+            shutil.copy2(respaldo / nombre, tmp / nombre)
+    try:
+        con = sqlite3.connect(str(tmp / "Manifest.db"))
+        total = con.execute("SELECT COUNT(*) FROM Files").fetchone()[0]
+    except sqlite3.Error as e:
+        salida.append(f"\nNo se pudo leer el indice del respaldo: {e}")
+        salida.append("Archivos en la raiz del respaldo:")
+        for p in sorted(respaldo.iterdir()):
+            if p.is_file():
+                salida.append(f"  {p.name}  {p.stat().st_size} bytes")
+        with open(respaldo / "Manifest.db", "rb") as f:
+            salida.append(f"Cabecera de Manifest.db: {f.read(16)!r}")
+        terminar(salida)
+        return
     salida.append(f"Archivos en el respaldo: {total}")
 
     where = " OR ".join(["domain LIKE ? OR relativePath LIKE ?"] * len(PATRONES))
@@ -137,6 +156,7 @@ def main():
         params,
     ).fetchall()
     con.close()
+    shutil.rmtree(tmp, ignore_errors=True)
 
     salida.append(f"Archivos relacionados con fondos: {len(filas)}\n")
     salida.append("TIPO   TAMAÑO(bytes)  DOMINIO | RUTA")
